@@ -1011,7 +1011,7 @@ void t_ts_generator::generate_process_function(t_service* tservice, t_function* 
   f_service_ << ts_indent()<< "if (this._handler." << tfunction->get_name()
              << ".length === " << fields.size() << ") {" << endl;
   indent_up();
-  indent(f_service_) << "Q.fcall(this._handler." << tfunction->get_name();
+  indent(f_service_) << "Q.fcall<"<< ts_get_type(tfunction->get_returntype()) << ">(this._handler." << tfunction->get_name() << ".bind(this._handler)";
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
     f_service_ << ", args." << (*f_iter)->get_name();
