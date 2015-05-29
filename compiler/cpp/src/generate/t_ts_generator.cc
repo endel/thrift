@@ -202,7 +202,7 @@ public:
       if (p != NULL && p != program_) {
         return p->get_name() + "_ttypes.";
       }
-      return "ttypes.";
+      return "";
     }
     return ts_namespace(p);
   }
@@ -219,6 +219,10 @@ public:
     if (ns.size() > 0) {
       ns += ".";
     }
+    if (gen_node_ && (p == NULL || p == program_)) {
+      ns = "";
+    }
+
 
     return ns;
   }
@@ -832,32 +836,36 @@ void t_ts_generator::generate_service(t_service* tservice) {
     f_service_ << "import ttypes = require('./" + program_->get_name() + "_types');" << endl;
     // Generate type aliases
     // enum
+    string myNamespace = program_->get_namespace("ts");
+    if (myNamespace.size() > 0) {
+      myNamespace += ".";
+    }
     std::vector<t_enum*> enums = program_->get_enums();
     std::vector<t_enum*>::iterator e_iter;
     for (e_iter = enums.begin(); e_iter != enums.end(); ++e_iter) {
       f_service_ << "import " << (*e_iter)->get_name() << " = ttypes."
-                << ts_namespace(program_) << (*e_iter)->get_name() << endl;
+                << myNamespace << (*e_iter)->get_name() << endl;
     }
     // const
     std::vector<t_const*> consts = program_->get_consts();
     std::vector<t_const*>::iterator c_iter;
     for (c_iter = consts.begin(); c_iter != consts.end(); ++c_iter) {
       f_service_ << "import " << (*c_iter)->get_name() << " = ttypes."
-                << ts_namespace(program_) << (*c_iter)->get_name() << endl;
+                << myNamespace << (*c_iter)->get_name() << endl;
     }
     // exception
     std::vector<t_struct*> exceptions = program_->get_xceptions();
     std::vector<t_struct*>::iterator x_iter;
     for (x_iter = exceptions.begin(); x_iter != exceptions.end(); ++x_iter) {
       f_service_ << "import " << (*x_iter)->get_name() << " = ttypes."
-                << ts_namespace(program_) << (*x_iter)->get_name() << endl;
+                << myNamespace << (*x_iter)->get_name() << endl;
     }
     // structs
     std::vector<t_struct*> structs = program_->get_structs();
     std::vector<t_struct*>::iterator s_iter;
     for (s_iter = structs.begin(); s_iter != structs.end(); ++s_iter) {
       f_service_ << "import " << (*s_iter)->get_name() << " = ttypes."
-                << ts_namespace(program_) << (*s_iter)->get_name() << endl;
+                << myNamespace << (*s_iter)->get_name() << endl;
     }
   }
 
@@ -1579,7 +1587,7 @@ void t_ts_generator::generate_deserialize_field(ofstream& out,
  */
 void t_ts_generator::generate_deserialize_struct(ofstream& out, t_struct* tstruct, string prefix) {
   out << ts_indent()<< prefix << " = new "
-      << tstruct->get_name() << "();" << endl << ts_indent()<< prefix << ".read(input);" << endl;
+      << ts_get_type(tstruct) << "();" << endl << ts_indent()<< prefix << ".read(input);" << endl;
 }
 
 void t_ts_generator::generate_deserialize_container(ofstream& out, t_type* ttype, string prefix) {
@@ -2107,7 +2115,7 @@ string t_ts_generator::ts_get_type(t_type* type) {
       ts_type = "void";
     }
   } else if (type->is_enum() || type->is_struct() || type->is_xception()) {
-    ts_type = type->get_name();
+    ts_type = ts_type_namespace(type->get_program()) + ts_namespace(type->get_program()) + type->get_name();
   } else if (type->is_list() || type->is_set()) {
     t_type* etype;
 
