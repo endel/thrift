@@ -1119,7 +1119,7 @@ void t_ts_generator::generate_process_function(t_service* tservice, t_function* 
   indent_up();
   f_service_ << ts_indent()<< "result = new " << resultname;
   if (is_return_void) {
-    f_service_ << "();" << endl << indent();
+    f_service_ << "((err != null ? err : {success: undefined}));" << endl << indent();
   } else {
     f_service_ << "((err != null ? err : {success: result_}));" << endl << indent();
   }
