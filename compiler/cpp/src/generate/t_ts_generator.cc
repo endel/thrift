@@ -300,7 +300,7 @@ void t_ts_generator::init_generator() {
   string outdir = get_out_dir();
 
   // Make output file(s)
-  string f_types_name = outdir + program_->get_name() + "_types.ts";
+  string f_types_name = outdir + program_->get_name() + ".ts";
   f_types_.open(f_types_name.c_str());
 
   // Print header
@@ -326,9 +326,7 @@ void t_ts_generator::init_generator() {
 string t_ts_generator::ts_includes() {
   if (gen_node_) {
     return string(
-        "import thrift = require('thrift');\n"
-        "import Thrift = thrift.Thrift;\n"
-        "import Q = thrift.Q;\n");
+        "import * as Thrift from 'thrift.js';\n");
   }
 
   return "";
@@ -343,9 +341,36 @@ string t_ts_generator::render_includes() {
   if (gen_node_) {
     const vector<t_program*>& includes = program_->get_includes();
     for (size_t i = 0; i < includes.size(); ++i) {
-      result += "import " + includes[i]->get_name() + "_ttypes = require('./" + includes[i]->get_name()
-                + "_types')\n";
+
+      // Import all exposed enums/structs/types from defined module
+      std::vector<std::string> imports;
+
+      const std::vector<t_typedef*>& typedefs = includes[i]->get_typedefs();
+      for (size_t j = 0; j < typedefs.size(); ++j) {
+        imports.push_back(typedefs[j]->get_type()->get_name());
+      }
+
+      const std::vector<t_enum*>& enums = includes[i]->get_enums();
+      for (size_t j = 0; j < enums.size(); ++j) {
+        imports.push_back(enums[j]->get_name());
+      }
+
+      const std::vector<t_struct*>& structs = includes[i]->get_structs();
+      for (size_t j = 0; j < structs.size(); ++j) {
+        imports.push_back(structs[j]->get_name());
+      }
+
+      std::stringstream modules;
+      for(size_t j = 0; j < imports.size(); ++j)
+      {
+        if(j != 0)
+          modules << ", ";
+        modules << imports[j];
+      }
+
+      result += "import { " + modules.str() + " } from './" + includes[i]->get_name() + ".ts'\n";
     }
+
     if (includes.size() > 0) {
       result += "\n";
     }
@@ -696,7 +721,7 @@ void t_ts_generator::generate_ts_struct_reader(ofstream& out, t_struct* tstruct)
   const vector<t_field*>& fields = tstruct->get_members();
   vector<t_field*>::const_iterator f_iter;
 
-  out << ts_indent() << "read(input: thrift.TProtocol): void {" << endl;
+  out << ts_indent() << "read(input: Thrift.TProtocol): void {" << endl;
 
   indent_up();
 
@@ -775,7 +800,7 @@ void t_ts_generator::generate_ts_struct_writer(ofstream& out, t_struct* tstruct)
   const vector<t_field*>& fields = tstruct->get_members();
   vector<t_field*>::const_iterator f_iter;
 
-  out << ts_indent() << "write(output: thrift.TProtocol): void {" << endl;
+  out << ts_indent() << "write(output: Thrift.TProtocol): void {" << endl;
 
   indent_up();
 
@@ -829,7 +854,7 @@ void t_ts_generator::generate_service(t_service* tservice) {
                  << "Processor = " << tservice->get_extends()->get_name() << ".Processor" << endl;
     }
 
-    f_service_ << "import ttypes = require('./" + program_->get_name() + "_types');" << endl;
+    f_service_ << "import ttypes = require('./" + program_->get_name() + ".ts');" << endl;
     // Generate type aliases
     // enum
     std::vector<t_enum*> enums = program_->get_enums();
@@ -937,7 +962,7 @@ void t_ts_generator::generate_service_processor(t_service* tservice) {
 
 
   // Generate the server implementation
-  indent(f_service_) << "process(input: thrift.TProtocol, output: thrift.TProtocol): any ";
+  indent(f_service_) << "process(input: Thrift.TProtocol, output: Thrift.TProtocol): any ";
 
   scope_up(f_service_);
 
@@ -972,7 +997,7 @@ void t_ts_generator::generate_service_processor(t_service* tservice) {
 void t_ts_generator::generate_process_function(t_service* tservice, t_function* tfunction) {
   (void)tservice;
   indent(f_service_) << "process_" + tfunction->get_name()
-                        + "(seqid: number, input: thrift.TProtocol, output: thrift.TProtocol) ";
+                        + "(seqid: number, input: Thrift.TProtocol, output: Thrift.TProtocol) ";
 
   scope_up(f_service_);
 
@@ -1033,7 +1058,7 @@ void t_ts_generator::generate_process_function(t_service* tservice, t_function* 
   indent(f_service_) << "}, function (err) {" << endl;
   indent_up();
 
-  indent(f_service_) << "var result: { write(output: thrift.TProtocol): any; };" << endl;
+  indent(f_service_) << "var result: { write(output: Thrift.TProtocol): any; };" << endl;
   bool has_exception = false;
   t_struct* exceptions = tfunction->get_xceptions();
   if (exceptions) {
@@ -1096,7 +1121,7 @@ void t_ts_generator::generate_process_function(t_service* tservice, t_function* 
   }
   indent_up();
 
-  indent(f_service_) << "var result: {write: (output: thrift.TProtocol) => void; };" << endl;
+  indent(f_service_) << "var result: {write: (output: Thrift.TProtocol) => void; };" << endl;
   indent(f_service_) << "if (err == null";
   if (has_exception) {
     const vector<t_field*>& members = exceptions->get_members();
@@ -1211,21 +1236,21 @@ void t_ts_generator::generate_service_client(t_service* tservice) {
   indent_up();
 
   if (gen_node_) {
-    f_service_ << ts_indent()<< "private output: thrift.TTransport;" << endl;
-    f_service_ << ts_indent()<< "private pClass: {new (trans: thrift.TTransport): thrift.TProtocol; };" << endl;
+    f_service_ << ts_indent()<< "private output: Thrift.TTransport;" << endl;
+    f_service_ << ts_indent()<< "private pClass: {new (trans: Thrift.TTransport): Thrift.TProtocol; };" << endl;
     f_service_ << ts_indent()<< "private _seqid: number = 0;" << endl;
     f_service_ << ts_indent()<< "private _reqs: {[key: string]: any; } = {}" << endl;
   } else {
-    f_service_ << ts_indent()<< "private input: thrift.TProtocol;" << endl;
-    f_service_ << ts_indent()<< "private output: thrift.TProtocol;" << endl;
+    f_service_ << ts_indent()<< "private input: Thrift.TProtocol;" << endl;
+    f_service_ << ts_indent()<< "private output: Thrift.TProtocol;" << endl;
     f_service_ << ts_indent()<< "private seqid: number = 0;" << endl;
   }
 
 
   if (gen_node_) {
-    f_service_ << ts_indent()<< "constructor(output: thrift.TTransport, pClass: {new (trans: thrift.TTransport): thrift.TProtocol; }) {" << endl;
+    f_service_ << ts_indent()<< "constructor(output: Thrift.TTransport, pClass: {new (trans: Thrift.TTransport): Thrift.TProtocol; }) {" << endl;
   } else {
-    f_service_ << ts_indent()<< "constructor(input: thrift.TProtocol, output?: thrift.TProtocol) {" << endl;
+    f_service_ << ts_indent()<< "constructor(input: Thrift.TProtocol, output?: Thrift.TProtocol) {" << endl;
   }
 
   indent_up();
@@ -1410,7 +1435,7 @@ void t_ts_generator::generate_service_client(t_service* tservice) {
         // Open function
         f_service_ << endl << indent()
                    << "recv_" << (*f_iter)->get_name()
-                   << "(input: thrift.TProtocol,mtype: Thrift.MessageType,rseqid: number) {" << endl;
+                   << "(input: Thrift.TProtocol,mtype: Thrift.MessageType,rseqid: number) {" << endl;
 
       } else {
         t_struct noargs(program_);
